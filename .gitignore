@@ -1,0 +1,14 @@
+.DS_Store
+**/.DS_Store
+
+website/node_modules/
+website/build/
+website/coverage/
+
+*.xcuserstate
+xcuserdata/
+DerivedData/
+
+.env
+.env.local
+.env.*.local
