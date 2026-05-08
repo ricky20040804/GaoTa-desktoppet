@@ -23,12 +23,30 @@ final class PetAnimator {
 
     func rotation(for bone: String, at now: CFTimeInterval) -> CGFloat {
         guard let currentMotion = motion.motions[currentMotionName],
-              let keyframes = currentMotion.bones[bone] else {
+              let keyframes = keyframes(for: bone, in: currentMotion) else {
             return 0
         }
 
         let time = localTime(for: currentMotion, now: now)
         return Self.interpolateRotation(keyframes: keyframes, time: time)
+    }
+
+    private func keyframes(for bone: String, in motion: PetMotion.Motion) -> [PetMotion.Keyframe]? {
+        if let exact = motion.bones[bone] {
+            return exact
+        }
+
+        let normalizedBone = Self.normalizeBoneName(bone)
+        return motion.bones.first { motionBone, _ in
+            Self.normalizeBoneName(motionBone) == normalizedBone
+        }?.value
+    }
+
+    private static func normalizeBoneName(_ bone: String) -> String {
+        bone
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .lowercased()
     }
 
     private func localTime(for motion: PetMotion.Motion, now: CFTimeInterval) -> TimeInterval {

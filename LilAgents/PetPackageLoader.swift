@@ -13,6 +13,22 @@ enum PetPackageLoader {
         case missingImage(String)
     }
 
+    static func userCustomPackageRootURL() -> URL? {
+        for rootURL in userCustomPackageRootCandidates() {
+            let templateURL = rootURL.appendingPathComponent("template.json")
+            let motionURL = rootURL.appendingPathComponent("motion.json")
+            let partsURL = rootURL.appendingPathComponent("parts")
+
+            if FileManager.default.fileExists(atPath: templateURL.path),
+               FileManager.default.fileExists(atPath: motionURL.path),
+               FileManager.default.fileExists(atPath: partsURL.path) {
+                return rootURL
+            }
+        }
+
+        return nil
+    }
+
     static func defaultTemplateURL() -> URL? {
         let desktopTemplate = defaultDesktopRoot()
             .appendingPathComponent("PetTemplates")
@@ -61,7 +77,24 @@ enum PetPackageLoader {
             .appendingPathComponent("custom_pet")
     }
 
+    private static func userCustomPackageRootCandidates() -> [URL] {
+        let homeURL = FileManager.default.homeDirectoryForCurrentUser
+        let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("gaotadeskpet")
+            .appendingPathComponent("custom_pet")
+
+        return [
+            defaultDesktopRoot().appendingPathComponent("custom_pet"),
+            homeURL.appendingPathComponent("Downloads").appendingPathComponent("custom_pet"),
+            appSupportURL,
+        ].compactMap { $0 }
+    }
+
     static func loadDefaultPackage() throws -> PetPackage {
+        if let userPackageRootURL = userCustomPackageRootURL() {
+            return try loadPackage(at: userPackageRootURL)
+        }
+
         guard let templateURL = defaultTemplateURL(),
               let motionURL = defaultMotionURL() else {
             throw LoadError.missingDefaultPackage

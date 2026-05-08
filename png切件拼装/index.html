@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Desktop Pet Template Builder</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <h1>Template Builder</h1>
+        <p>PNG 切件拼装、pivot 设置、template.json 导出工具</p>
+      </div>
+      <div class="header-fields">
+        <label>
+          Template ID
+          <input id="templateIdInput" type="text" value="dog_base" />
+        </label>
+        <label>
+          Canvas
+          <span class="canvas-size">512 x 512</span>
+        </label>
+      </div>
+    </header>
+
+    <section class="topbar" aria-label="工具栏">
+      <label class="file-button">
+        <i data-lucide="image-plus"></i>
+        <span>Load PNG Parts</span>
+        <input id="fileInput" type="file" accept="image/png" multiple />
+      </label>
+      <button id="exportButton" type="button">
+        <i data-lucide="braces"></i>
+        Export Template JSON
+      </button>
+      <button id="downloadButton" type="button">
+        <i data-lucide="download"></i>
+        Download template.json
+      </button>
+      <button id="saveButton" type="button">
+        <i data-lucide="save"></i>
+        Save Project
+      </button>
+      <button id="loadButton" type="button">
+        <i data-lucide="folder-open"></i>
+        Load Project
+      </button>
+      <button id="resetButton" class="danger" type="button">
+        <i data-lucide="rotate-ccw"></i>
+        Reset
+      </button>
+    </section>
+
+    <main class="workspace">
+      <section class="stage-section" aria-label="画布区域">
+        <div class="stage-meta">
+          <span id="statusText">选择 PNG 后开始编辑。</span>
+          <span id="pointerText">x: -, y: -</span>
+        </div>
+        <div class="stage-frame">
+          <div id="canvasSurface" class="canvas-surface" aria-label="512 x 512 透明棋盘格画布"></div>
+        </div>
+      </section>
+
+      <aside class="side-panel" aria-label="图层与属性">
+        <section class="panel-block">
+          <div class="block-heading">
+            <h2>Layers</h2>
+          </div>
+          <div id="layersList" class="layers-list"></div>
+        </section>
+
+        <section class="panel-block">
+          <div class="block-heading">
+            <h2>Selected Part</h2>
+            <button id="pivotModeButton" type="button">
+              <i data-lucide="crosshair"></i>
+              Set Pivot Mode
+            </button>
+          </div>
+
+          <div id="emptySelection" class="empty-selection">
+            还没有选中图层。
+          </div>
+
+          <div id="selectionForm" class="selection-form" hidden>
+            <label>
+              Part ID
+              <input id="partIdInput" type="text" readonly />
+            </label>
+            <label>
+              Bone Name
+              <input id="boneInput" type="text" />
+            </label>
+            <div class="field-grid">
+              <label>
+                Position X
+                <input id="posXInput" type="number" step="1" />
+              </label>
+              <label>
+                Position Y
+                <input id="posYInput" type="number" step="1" />
+              </label>
+            </div>
+            <label>
+              Scale
+              <span id="scaleValue" class="inline-value">1.00</span>
+              <input id="scaleInput" type="range" min="0.1" max="3" value="1" step="0.01" />
+            </label>
+            <label>
+              Rotation
+              <span id="rotationValue" class="inline-value">0°</span>
+              <input id="rotationInput" type="range" min="-180" max="180" value="0" step="1" />
+            </label>
+            <label>
+              Rotation Degrees
+              <input id="rotationNumberInput" type="number" min="-360" max="360" value="0" step="1" />
+            </label>
+            <div class="field-grid">
+              <label>
+                Pivot X
+                <input id="pivotXInput" type="number" step="1" />
+              </label>
+              <label>
+                Pivot Y
+                <input id="pivotYInput" type="number" step="1" />
+              </label>
+            </div>
+            <div id="sizeText" class="size-text">size: -</div>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <section class="json-section" aria-label="导出预览">
+      <div class="block-heading">
+        <h2>JSON Preview</h2>
+        <span id="jsonState">未生成</span>
+      </div>
+      <textarea id="jsonPreview" spellcheck="false" readonly></textarea>
+    </section>
+  </body>
+</html>

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Brush,
   Eraser,
+  ImagePlus,
   Minus,
   Move,
   PaintBucket,
@@ -9,15 +11,20 @@ import {
   Plus,
   Redo2,
   RotateCcw,
+  Save,
   Trash2,
   Undo2,
+  X,
 } from 'lucide-react';
+import JSZip from 'jszip';
 import './App.css';
 import { animalOptions, getPetTemplatesByAnimal } from './data/petCatalog';
 
 const WHEEL_CENTER = { x: 620, y: 330 };
 const SNAP_DURATION = 320;
 const PAINT_CANVAS_SIZE = 550;
+const TRANSPARENT_PNG_DATA_URL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR42mP8z8BQDwAFgwJ/lzqY9QAAAABJRU5ErkJggg==';
 
 const paintTools = [
   { id: 'move', label: 'Move', Icon: Move },
@@ -38,6 +45,16 @@ const paintColors = [
 ];
 
 const brushSizes = [3, 6, 12, 22];
+const studioSlideOptions = [
+  {
+    title: '生成卡通的专属宠物',
+    subtitle: 'Generate exclusive pets for cartoons',
+  },
+  {
+    title: '生成实际的专属宠物',
+    subtitle: 'Generate an actual exclusive pet',
+  },
+];
 
 const partNames = [
   'Overview',
@@ -49,6 +66,87 @@ const partNames = [
   'rightfrontleg',
   'rightbackleg',
 ];
+
+const realPetPartOptions = partNames.map((label) => ({
+  id: label.toLowerCase(),
+  label,
+}));
+const realPetPreviewOptions = [{ id: 'assembly', label: 'Assembly' }, ...realPetPartOptions];
+
+const exportPartConfig = {
+  body: { bone: 'body', position: { x: 176, y: 196 }, pivot: { x: 128, y: 98 }, zIndex: 3 },
+  head: { bone: 'head', position: { x: 118, y: 110 }, pivot: { x: 106, y: 116 }, zIndex: 4 },
+  tail: { bone: 'tail', position: { x: 330, y: 156 }, pivot: { x: 34, y: 96 }, zIndex: 2 },
+  leftfrontleg: { bone: 'leftfrontLeg', position: { x: 170, y: 322 }, pivot: { x: 54, y: 28 }, zIndex: 5 },
+  leftbackleg: { bone: 'leftbackLeg', position: { x: 274, y: 326 }, pivot: { x: 52, y: 28 }, zIndex: 1 },
+  rightfrontleg: { bone: 'rightfrontLeg', position: { x: 216, y: 324 }, pivot: { x: 54, y: 28 }, zIndex: 6 },
+  rightbackleg: { bone: 'rightbackLeg', position: { x: 322, y: 326 }, pivot: { x: 52, y: 28 }, zIndex: 0 },
+};
+
+const exportMotion = {
+  motionVersion: 1,
+  defaultMotion: 'walk',
+  motions: {
+    idle: {
+      duration: 1,
+      loop: true,
+      bones: {
+        tail: [
+          { time: 0, rotation: -32 },
+          { time: 0.25, rotation: 0 },
+          { time: 0.5, rotation: 32 },
+          { time: 0.75, rotation: 0 },
+          { time: 1, rotation: -32 },
+        ],
+      },
+    },
+    walk: {
+      duration: 1,
+      loop: true,
+      bones: {
+        body: [
+          { time: 0, y: 0 },
+          { time: 0.25, y: -4 },
+          { time: 0.5, y: 0 },
+          { time: 0.75, y: -4 },
+          { time: 1, y: 0 },
+        ],
+        head: [
+          { time: 0, rotation: -2 },
+          { time: 0.5, rotation: 2 },
+          { time: 1, rotation: -2 },
+        ],
+        tail: [
+          { time: 0, rotation: -32 },
+          { time: 0.25, rotation: 0 },
+          { time: 0.5, rotation: 32 },
+          { time: 0.75, rotation: 0 },
+          { time: 1, rotation: -32 },
+        ],
+        leftfrontLeg: [
+          { time: 0, rotation: -12 },
+          { time: 0.5, rotation: 12 },
+          { time: 1, rotation: -12 },
+        ],
+        leftbackLeg: [
+          { time: 0, rotation: 12 },
+          { time: 0.5, rotation: -12 },
+          { time: 1, rotation: 12 },
+        ],
+        rightfrontLeg: [
+          { time: 0, rotation: 12 },
+          { time: 0.5, rotation: -12 },
+          { time: 1, rotation: 12 },
+        ],
+        rightbackLeg: [
+          { time: 0, rotation: -12 },
+          { time: 0.5, rotation: 12 },
+          { time: 1, rotation: -12 },
+        ],
+      },
+    },
+  },
+};
 
 const features = [
   {
@@ -74,6 +172,30 @@ const features = [
 ];
 
 const normalizeIndex = (index, length) => ((index % length) + length) % length;
+
+const dataUrlToBlob = (dataUrl) => {
+  const [metadata, base64] = dataUrl.split(',');
+  const mimeType = metadata.match(/data:(.*);base64/)?.[1] ?? 'application/octet-stream';
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return new Blob([bytes], { type: mimeType });
+};
+
+const downloadBlob = (blob, fileName) => {
+  const downloadURL = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = downloadURL;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(downloadURL), 0);
+};
 
 const getCircularDelta = (index, selectedIndex, length) => {
   let delta = index - selectedIndex;
@@ -274,6 +396,811 @@ function PetLayerStack({ className = '', maxHeight, maxWidth, selectedTemplate, 
         })}
       </div>
     </div>
+  );
+}
+
+function RealPetStudio() {
+  const fileInputRef = useRef(null);
+  const imageRef = useRef(null);
+  const maskCanvasRef = useRef(null);
+  const maskHistoryRef = useRef([]);
+  const maskDrawingRef = useRef(false);
+  const assemblyDragRef = useRef(null);
+  const lastMaskPointRef = useRef(null);
+  const [imageSrc, setImageSrc] = useState('');
+  const [activePartId, setActivePartId] = useState('head');
+  const [activeCutTool, setActiveCutTool] = useState('brush');
+  const [cutBrushSize, setCutBrushSize] = useState(34);
+  const [previewPartId, setPreviewPartId] = useState('overview');
+  const [canUndoMask, setCanUndoMask] = useState(false);
+  const [cutParts, setCutParts] = useState({});
+  const [cutPartSizes, setCutPartSizes] = useState({});
+  const [partLayouts, setPartLayouts] = useState({});
+  const [isPivotModalOpen, setIsPivotModalOpen] = useState(false);
+  const [pivotModalMessage, setPivotModalMessage] = useState('');
+
+  const activePart = realPetPartOptions.find((part) => part.id === activePartId);
+  const previewPart = realPetPartOptions.find((part) => part.id === previewPartId);
+
+  const selectRealPetPart = (partId) => {
+    setPreviewPartId(partId);
+
+    if (partId !== 'overview' && partId !== 'assembly') {
+      setActivePartId(partId);
+    }
+  };
+
+  const resizeMaskCanvas = () => {
+    const canvas = maskCanvasRef.current;
+    const stage = canvas?.parentElement;
+
+    if (!canvas || !stage) {
+      return;
+    }
+
+    canvas.width = Math.round(stage.clientWidth);
+    canvas.height = Math.round(stage.clientHeight);
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    maskHistoryRef.current = [];
+    setCanUndoMask(false);
+  };
+
+  const loadFile = (file) => {
+    if (!file?.type.startsWith('image/')) {
+      return;
+    }
+
+    const nextSrc = URL.createObjectURL(file);
+
+    setImageSrc((currentSrc) => {
+      if (currentSrc) {
+        URL.revokeObjectURL(currentSrc);
+      }
+
+      return nextSrc;
+    });
+    setCutParts({});
+    setCutPartSizes({});
+    setPartLayouts({});
+    setPreviewPartId('overview');
+    setActivePartId('head');
+    window.setTimeout(resizeMaskCanvas, 0);
+  };
+
+  useEffect(
+    () => () => {
+      if (imageSrc) {
+        URL.revokeObjectURL(imageSrc);
+      }
+    },
+    [imageSrc],
+  );
+
+  const handleDrop = (event) => {
+    event.preventDefault();
+    loadFile(event.dataTransfer.files[0]);
+  };
+
+  const saveMaskHistory = () => {
+    const canvas = maskCanvasRef.current;
+
+    if (!canvas) {
+      return;
+    }
+
+    const context = canvas.getContext('2d');
+    maskHistoryRef.current = [...maskHistoryRef.current.slice(-11), context.getImageData(0, 0, canvas.width, canvas.height)];
+    setCanUndoMask(true);
+  };
+
+  const getMaskPoint = (event) => {
+    const bounds = maskCanvasRef.current.getBoundingClientRect();
+
+    return {
+      x: event.clientX - bounds.left,
+      y: event.clientY - bounds.top,
+    };
+  };
+
+  const paintMaskLine = (fromPoint, toPoint) => {
+    const canvas = maskCanvasRef.current;
+    const context = canvas?.getContext('2d');
+
+    if (!context) {
+      return;
+    }
+
+    context.save();
+    context.globalCompositeOperation = activeCutTool === 'eraser' ? 'destination-out' : 'source-over';
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.lineWidth = cutBrushSize;
+    context.strokeStyle = 'rgba(61, 139, 255, 0.68)';
+    context.beginPath();
+    context.moveTo(fromPoint.x, fromPoint.y);
+    context.lineTo(toPoint.x, toPoint.y);
+    context.stroke();
+    context.restore();
+  };
+
+  const beginMaskPaint = (event) => {
+    if (!imageSrc) {
+      return;
+    }
+
+    event.preventDefault();
+    saveMaskHistory();
+    maskDrawingRef.current = true;
+    lastMaskPointRef.current = getMaskPoint(event);
+    paintMaskLine(lastMaskPointRef.current, lastMaskPointRef.current);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleMaskMove = (event) => {
+    if (!maskDrawingRef.current) {
+      return;
+    }
+
+    const nextPoint = getMaskPoint(event);
+    paintMaskLine(lastMaskPointRef.current, nextPoint);
+    lastMaskPointRef.current = nextPoint;
+  };
+
+  const finishMaskPaint = (event) => {
+    if (maskDrawingRef.current && event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    maskDrawingRef.current = false;
+    lastMaskPointRef.current = null;
+  };
+
+  const undoMask = () => {
+    const canvas = maskCanvasRef.current;
+    const previousMask = maskHistoryRef.current.pop();
+
+    if (!canvas || !previousMask) {
+      return;
+    }
+
+    canvas.getContext('2d').putImageData(previousMask, 0, 0);
+    setCanUndoMask(maskHistoryRef.current.length > 0);
+  };
+
+  const resetMask = () => {
+    const canvas = maskCanvasRef.current;
+
+    if (!canvas) {
+      return;
+    }
+
+    saveMaskHistory();
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const saveCutPart = () => {
+    const image = imageRef.current;
+    const maskCanvas = maskCanvasRef.current;
+
+    if (!image || !maskCanvas || !activePart) {
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    const stageWidth = maskCanvas.width;
+    const stageHeight = maskCanvas.height;
+    const imageScale = Math.min(stageWidth / image.naturalWidth, stageHeight / image.naturalHeight);
+    const drawnWidth = image.naturalWidth * imageScale;
+    const drawnHeight = image.naturalHeight * imageScale;
+    const drawnX = (stageWidth - drawnWidth) / 2;
+    const drawnY = (stageHeight - drawnHeight) / 2;
+
+    canvas.width = stageWidth;
+    canvas.height = stageHeight;
+    context.drawImage(image, drawnX, drawnY, drawnWidth, drawnHeight);
+    context.globalCompositeOperation = 'destination-in';
+    context.drawImage(maskCanvas, 0, 0);
+
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    let minX = canvas.width;
+    let minY = canvas.height;
+    let maxX = 0;
+    let maxY = 0;
+
+    for (let y = 0; y < canvas.height; y += 1) {
+      for (let x = 0; x < canvas.width; x += 1) {
+        if (imageData.data[(y * canvas.width + x) * 4 + 3] > 0) {
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+        }
+      }
+    }
+
+    if (minX > maxX || minY > maxY) {
+      return;
+    }
+
+    const trimmedCanvas = document.createElement('canvas');
+    trimmedCanvas.width = maxX - minX + 1;
+    trimmedCanvas.height = maxY - minY + 1;
+    trimmedCanvas
+      .getContext('2d')
+      .drawImage(canvas, minX, minY, trimmedCanvas.width, trimmedCanvas.height, 0, 0, trimmedCanvas.width, trimmedCanvas.height);
+
+    setCutParts((currentParts) => ({
+      ...currentParts,
+      [activePart.id]: trimmedCanvas.toDataURL('image/png'),
+    }));
+    setCutPartSizes((currentSizes) => ({
+      ...currentSizes,
+      [activePart.id]: {
+        height: trimmedCanvas.height,
+        width: trimmedCanvas.width,
+      },
+    }));
+    setPartLayouts((currentLayouts) => ({
+      ...currentLayouts,
+      [activePart.id]: currentLayouts[activePart.id] ?? {
+        position: exportPartConfig[activePart.id]?.position ?? { x: 180, y: 180 },
+        pivot: {
+          x: Math.round(trimmedCanvas.width / 2),
+          y: Math.round(trimmedCanvas.height / 2),
+        },
+      },
+    }));
+    setPreviewPartId(activePart.id);
+  };
+
+  const getStagePoint = (event, stage) => {
+    const bounds = stage.getBoundingClientRect();
+    const scale = 512 / bounds.width;
+
+    return {
+      x: (event.clientX - bounds.left) * scale,
+      y: (event.clientY - bounds.top) * scale,
+    };
+  };
+
+  const getAssemblyPoint = (event) => getStagePoint(event, event.currentTarget);
+
+  const beginPartLayoutDrag = (event, partId, mode, stageSelector) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const stage = event.currentTarget.closest(stageSelector);
+
+    if (!stage) {
+      return;
+    }
+
+    const startPoint = getStagePoint(event, stage);
+
+    setActivePartId(partId);
+    assemblyDragRef.current = {
+      layout: partLayouts[partId],
+      mode,
+      partId,
+      startPoint,
+    };
+  };
+
+  const beginAssemblyDrag = (event, partId, mode) => {
+    setPreviewPartId('assembly');
+    beginPartLayoutDrag(event, partId, mode, '.real-pet-assembly-stage');
+  };
+
+  const beginPivotModalDrag = (event, partId, mode) => {
+    beginPartLayoutDrag(event, partId, mode, '.pivot-modal-stage');
+  };
+
+  const handleLayoutMove = (point) => {
+    const dragState = assemblyDragRef.current;
+
+    if (!dragState) {
+      return;
+    }
+
+    const deltaX = point.x - dragState.startPoint.x;
+    const deltaY = point.y - dragState.startPoint.y;
+    const size = cutPartSizes[dragState.partId] ?? { width: 1, height: 1 };
+
+    setPartLayouts((currentLayouts) => {
+      const baseLayout = dragState.layout ?? currentLayouts[dragState.partId];
+      const nextLayout = {
+        position: { ...baseLayout.position },
+        pivot: { ...baseLayout.pivot },
+      };
+
+      if (dragState.mode === 'part') {
+        nextLayout.position.x = Math.round(baseLayout.position.x + deltaX);
+        nextLayout.position.y = Math.round(baseLayout.position.y + deltaY);
+      } else {
+        nextLayout.pivot.x = Math.round(Math.min(size.width, Math.max(0, baseLayout.pivot.x + deltaX)));
+        nextLayout.pivot.y = Math.round(Math.min(size.height, Math.max(0, baseLayout.pivot.y + deltaY)));
+      }
+
+      return {
+        ...currentLayouts,
+        [dragState.partId]: nextLayout,
+      };
+    });
+  };
+
+  const handleAssemblyMove = (event) => {
+    handleLayoutMove(getAssemblyPoint(event));
+  };
+
+  const handlePivotModalMove = (event) => {
+    handleLayoutMove(getStagePoint(event, event.currentTarget));
+  };
+
+  const finishAssemblyDrag = () => {
+    assemblyDragRef.current = null;
+  };
+
+  const exportRealPetZip = async () => {
+    if (cutPartEntries.length === 0) {
+      setPivotModalMessage('请先导入图片，抠出至少一个部位，并点击 Save 保存切件。');
+      return;
+    }
+
+    try {
+      const zip = new JSZip();
+      const partsFolder = zip.folder('parts');
+      const exportPartIds = Object.keys(exportPartConfig);
+      const template = {
+        templateId: 'user_custom_pet',
+        canvas: {
+          width: 512,
+          height: 512,
+        },
+        parts: {},
+      };
+
+      exportPartIds.forEach((partId) => {
+        const partConfig = exportPartConfig[partId];
+        const size = cutPartSizes[partId] ?? { width: 1, height: 1 };
+        const layout = partLayouts[partId] ?? {
+          position: partConfig.position,
+          pivot: cutParts[partId] ? partConfig.pivot : { x: 0, y: 0 },
+        };
+
+        template.parts[partConfig.bone] = {
+          image: `parts/${partId}.png`,
+          bone: partConfig.bone,
+          position: layout.position,
+          pivot: layout.pivot,
+          size,
+          scale: 1,
+          rotation: 0,
+          zIndex: partConfig.zIndex,
+        };
+
+        partsFolder.file(`${partId}.png`, dataUrlToBlob(cutParts[partId] ?? TRANSPARENT_PNG_DATA_URL));
+      });
+
+      zip.file('template.json', JSON.stringify(template, null, 2));
+      zip.file('motion.json', JSON.stringify(exportMotion, null, 2));
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      downloadBlob(content, 'custom_pet.zip');
+    } catch (error) {
+      setPivotModalMessage('导出失败，请再试一次。');
+    }
+  };
+
+  const openPivotModalBeforeExport = () => {
+    setPivotModalMessage('');
+
+    if (cutPartEntries.length === 0) {
+      setPivotModalMessage('请先导入图片，抠出至少一个部位，并点击 Save 保存切件。');
+      setIsPivotModalOpen(true);
+      return;
+    }
+
+    if (!cutParts[activePartId] && cutPartEntries[0]) {
+      setActivePartId(cutPartEntries[0].id);
+    }
+    setIsPivotModalOpen(true);
+  };
+
+  const cutPartEntries = realPetPartOptions.filter((part) => part.id !== 'overview' && cutParts[part.id]);
+
+  return (
+    <>
+      <div className="studio-heading">
+        <p className="eyebrow">Real pet studio</p>
+        <h1>Build from a real pet photo</h1>
+      </div>
+
+      <div className="real-pet-cutout-panel">
+        <div className="real-pet-cutout-background" aria-hidden="true">
+          <video
+            autoPlay
+            className="real-pet-cutout-background-video"
+            loop
+            muted
+            playsInline
+            src="/cover1.mov?v=20260507153031"
+          />
+        </div>
+        <div
+          className={`real-pet-dropzone ${imageSrc ? 'has-image' : ''}`}
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={handleDrop}
+        >
+          {imageSrc ? (
+            <div
+              className="real-pet-image-stage"
+              onPointerCancel={finishMaskPaint}
+              onPointerDown={beginMaskPaint}
+              onPointerMove={handleMaskMove}
+              onPointerUp={finishMaskPaint}
+              style={{ '--cut-brush-size': `${cutBrushSize}px` }}
+            >
+              <img
+                alt="Uploaded real pet"
+                className="real-pet-source-image"
+                onLoad={resizeMaskCanvas}
+                ref={imageRef}
+                src={imageSrc}
+              />
+              <canvas className="real-pet-mask-canvas" ref={maskCanvasRef} />
+              <span className="real-pet-active-part-label">{activePart?.label}</span>
+            </div>
+          ) : (
+            <button className="real-pet-upload-prompt" onClick={() => fileInputRef.current?.click()} type="button">
+              <strong>拖入真实宠物图片</strong>
+              <span>PNG 或 JPG</span>
+            </button>
+          )}
+          <input
+            accept="image/png,image/jpeg,image/webp"
+            className="real-pet-file-input"
+            onChange={(event) => loadFile(event.target.files[0])}
+            ref={fileInputRef}
+            type="file"
+          />
+        </div>
+
+        <div className="real-pet-cutout-toolbar" aria-label="Real pet cutout tools">
+          <div className="real-pet-tool-set" aria-label="Cutout tools">
+            <span className="real-pet-tool-group-label">Tools</span>
+            <button
+              aria-label="抠图笔"
+              aria-pressed={activeCutTool === 'brush'}
+              className="real-pet-icon-tool"
+              onClick={() => setActiveCutTool('brush')}
+              title="抠图笔"
+              type="button"
+            >
+              <Brush size={18} strokeWidth={2.25} />
+            </button>
+            <button
+              aria-label="橡皮擦"
+              aria-pressed={activeCutTool === 'eraser'}
+              className="real-pet-icon-tool"
+              onClick={() => setActiveCutTool('eraser')}
+              title="橡皮擦"
+              type="button"
+            >
+              <Eraser size={18} strokeWidth={2.25} />
+            </button>
+          </div>
+
+          <div className="real-pet-tool-set real-pet-size-set" aria-label="Cutout brush size">
+            <span className="real-pet-tool-group-label">Size</span>
+            <input
+              aria-label="Cutout brush size"
+              max="72"
+              min="12"
+              onChange={(event) => setCutBrushSize(Number(event.target.value))}
+              step="2"
+              type="range"
+              value={cutBrushSize}
+            />
+            <span className="real-pet-size-value">{cutBrushSize}px</span>
+          </div>
+
+          <div className="real-pet-tool-set" aria-label="Cutout actions">
+            <span className="real-pet-tool-group-label">Edit</span>
+            <button
+              aria-label="回退"
+              className="real-pet-icon-tool"
+              disabled={!canUndoMask}
+              onClick={undoMask}
+              title="回退"
+              type="button"
+            >
+              <Undo2 size={18} strokeWidth={2.25} />
+            </button>
+            <button
+              aria-label="Reset"
+              className="real-pet-icon-tool"
+              disabled={!imageSrc}
+              onClick={resetMask}
+              title="Reset"
+              type="button"
+            >
+              <RotateCcw size={18} strokeWidth={2.25} />
+            </button>
+            <button
+              aria-label="重新导入图片"
+              className="real-pet-icon-tool"
+              onClick={() => fileInputRef.current?.click()}
+              title="重新导入图片"
+              type="button"
+            >
+              <ImagePlus size={18} strokeWidth={2.25} />
+            </button>
+            <button
+              aria-label={`保存为 ${activePart?.label}`}
+              className="real-pet-icon-tool is-save"
+              disabled={!imageSrc}
+              onClick={saveCutPart}
+              title={`保存为 ${activePart?.label}`}
+              type="button"
+            >
+              <Save size={18} strokeWidth={2.25} />
+            </button>
+          </div>
+        </div>
+
+        <div className="real-pet-part-picker" aria-label="Choose part to cut">
+          {realPetPartOptions
+            .filter((part) => part.id !== 'overview')
+            .map((part) => (
+              <button
+                aria-pressed={activePartId === part.id}
+                className="real-pet-part-chip"
+                key={part.id}
+                onClick={() => selectRealPetPart(part.id)}
+                type="button"
+              >
+                {part.label}
+              </button>
+            ))}
+        </div>
+
+      </div>
+
+      <div className="real-pet-preview-panel">
+        <div className="real-pet-preview-tabs" aria-label="Preview real pet parts">
+          {realPetPreviewOptions.map((part) => (
+            <button
+              aria-pressed={previewPartId === part.id}
+              className="real-pet-preview-tab"
+              key={part.id}
+              onClick={() => selectRealPetPart(part.id)}
+              type="button"
+            >
+              {part.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="real-pet-preview-display">
+          {previewPartId === 'assembly' ? (
+            cutPartEntries.length > 0 ? (
+              <div
+                className="real-pet-assembly-stage"
+                onPointerCancel={finishAssemblyDrag}
+                onPointerMove={handleAssemblyMove}
+                onPointerUp={finishAssemblyDrag}
+              >
+                {cutPartEntries.map((part) => {
+                  const layout = partLayouts[part.id];
+                  const size = cutPartSizes[part.id];
+
+                  if (!layout || !size) {
+                    return null;
+                  }
+
+                  return (
+                    <div
+                      className={`real-pet-assembly-part ${activePartId === part.id ? 'is-active' : ''}`}
+                      key={part.id}
+                      style={{
+                        height: `${size.height}px`,
+                        left: `${layout.position.x}px`,
+                        top: `${layout.position.y}px`,
+                        width: `${size.width}px`,
+                        zIndex: exportPartConfig[part.id]?.zIndex ?? 1,
+                      }}
+                    >
+                      <img
+                        alt=""
+                        draggable="false"
+                        onPointerDown={(event) => beginAssemblyDrag(event, part.id, 'part')}
+                        src={cutParts[part.id]}
+                      />
+                      {activePartId === part.id && (
+                        <button
+                          aria-label={`Move ${part.label} pivot`}
+                          className="real-pet-pivot-handle"
+                          onPointerDown={(event) => beginAssemblyDrag(event, part.id, 'pivot')}
+                          style={{
+                            left: `${layout.pivot.x}px`,
+                            top: `${layout.pivot.y}px`,
+                          }}
+                          title={`${part.label} pivot`}
+                          type="button"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="real-pet-empty-state">保存切件后进入 Assembly 拼装位置和 pivot</div>
+            )
+          ) : previewPartId === 'overview' ? (
+            cutPartEntries.length > 0 ? (
+              <div className="real-pet-overview-grid">
+                {cutPartEntries.map((part) => (
+                  <figure className="real-pet-overview-card" key={part.id}>
+                    <img alt="" src={cutParts[part.id]} />
+                    <figcaption>{part.label}</figcaption>
+                  </figure>
+                ))}
+              </div>
+            ) : (
+              <div className="real-pet-empty-state">保存切件后会在这里生成 overview</div>
+            )
+          ) : cutParts[previewPartId] ? (
+            <figure className="real-pet-single-preview">
+              <img alt={`${previewPart?.label} cutout`} src={cutParts[previewPartId]} />
+              <figcaption>{previewPart?.label}</figcaption>
+            </figure>
+          ) : (
+            <div className="real-pet-empty-state">还没有保存 {previewPart?.label}</div>
+          )}
+        </div>
+
+        <button
+          className="real-pet-generate-button"
+          onClick={openPivotModalBeforeExport}
+          type="button"
+        >
+          Generate Pet
+        </button>
+      </div>
+
+      {isPivotModalOpen && createPortal(
+        <div
+          className="pivot-modal-overlay"
+          onMouseDown={() => setIsPivotModalOpen(false)}
+          role="presentation"
+        >
+          <section
+            aria-label="Set pet part pivots"
+            aria-modal="true"
+            className="pivot-modal"
+            onMouseDown={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <button
+              aria-label="Close pivot editor"
+              className="pivot-modal-close"
+              onClick={() => setIsPivotModalOpen(false)}
+              type="button"
+            >
+              <X size={22} strokeWidth={2.4} />
+            </button>
+
+            <div className="pivot-modal-copy">
+              <p className="eyebrow">Pivot editor</p>
+              <h2>设定每个切件的旋转中心</h2>
+              <p>
+                {cutPartEntries.length > 0
+                  ? '你保存好的 PNG 切件已经自动导入。选择部位后拖动蓝色小点来设置 pivot；需要微调拼装位置时，也可以拖动切件本身。'
+                  : '这里会自动载入你已经 Save 的透明 PNG 切件。当前还没有可导出的切件，请先回到抠图画板保存至少一个部位。'}
+              </p>
+              {pivotModalMessage && <div className="pivot-modal-message">{pivotModalMessage}</div>}
+            </div>
+
+            <div className="pivot-modal-body">
+              <div
+                className="pivot-modal-stage"
+                onPointerCancel={finishAssemblyDrag}
+                onPointerMove={handlePivotModalMove}
+                onPointerUp={finishAssemblyDrag}
+              >
+                {cutPartEntries.length > 0 ? (
+                  cutPartEntries.map((part) => {
+                    const layout = partLayouts[part.id];
+                    const size = cutPartSizes[part.id];
+
+                    if (!layout || !size) {
+                      return null;
+                    }
+
+                    return (
+                      <div
+                        className={`pivot-modal-part ${activePartId === part.id ? 'is-active' : ''}`}
+                        key={part.id}
+                        style={{
+                          height: `${size.height}px`,
+                          left: `${layout.position.x}px`,
+                          top: `${layout.position.y}px`,
+                          width: `${size.width}px`,
+                          zIndex: exportPartConfig[part.id]?.zIndex ?? 1,
+                        }}
+                      >
+                        <img
+                          alt=""
+                          draggable="false"
+                          onPointerDown={(event) => beginPivotModalDrag(event, part.id, 'part')}
+                          src={cutParts[part.id]}
+                        />
+                        {activePartId === part.id && (
+                          <button
+                            aria-label={`Move ${part.label} pivot`}
+                            className="pivot-modal-handle"
+                            onPointerDown={(event) => beginPivotModalDrag(event, part.id, 'pivot')}
+                            style={{
+                              left: `${layout.pivot.x}px`,
+                              top: `${layout.pivot.y}px`,
+                            }}
+                            title={`${part.label} pivot`}
+                            type="button"
+                          />
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="pivot-modal-empty-state">
+                    <strong>还没有保存切件</strong>
+                    <span>先选择 head、body、tail 或四肢，用抠图笔涂出区域，然后点击 Save。</span>
+                  </div>
+                )}
+              </div>
+
+              <aside className="pivot-modal-sidebar">
+                <div className="pivot-modal-tabs" aria-label="Choose part pivot">
+                  {cutPartEntries.map((part) => (
+                    <button
+                      aria-pressed={activePartId === part.id}
+                      className="pivot-modal-tab"
+                      key={part.id}
+                      onClick={() => setActivePartId(part.id)}
+                      type="button"
+                    >
+                      {part.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="pivot-modal-readout">
+                  <strong>{cutPartEntries.length > 0 ? activePart?.label : '等待切件'}</strong>
+                  <span>
+                    {cutPartEntries.length > 0
+                      ? `pivot x ${Math.round(partLayouts[activePartId]?.pivot?.x ?? 0)} / y ${Math.round(
+                          partLayouts[activePartId]?.pivot?.y ?? 0,
+                        )}`
+                      : '保存切件后这里会显示 pivot 坐标'}
+                  </span>
+                </div>
+                <button
+                  className="pivot-modal-export"
+                  disabled={cutPartEntries.length === 0}
+                  onClick={async () => {
+                    await exportRealPetZip();
+                    setIsPivotModalOpen(false);
+                  }}
+                  type="button"
+                >
+                  Confirm & Download
+                </button>
+              </aside>
+            </div>
+          </section>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 
@@ -709,6 +1636,98 @@ function InteractivePetPreview({ selectedPart, selectedTemplate, status, templat
           ? 'Template unavailable'
           : '';
 
+  const generatePresetPetZip = async () => {
+    if (!selectedTemplate || !template || status !== 'ready') {
+      window.alert('模板还没有加载完成，请稍等一下再生成。');
+      return;
+    }
+
+    try {
+      const zip = new JSZip();
+      const partsFolder = zip.folder('parts');
+      const savedEdits = editedPartsRef.current;
+      const templateExport = {
+        ...template,
+        templateId: `${selectedTemplate.animalType}_${selectedTemplate.breed}_custom`,
+        parts: {},
+      };
+
+      await Promise.all(
+        getTemplateParts(template).map(async (part) => {
+          const fileName = getPartFileName(part.image);
+          const partId = fileName.replace(/\.[^.]+$/, '').toLowerCase();
+          const editDataUrl = savedEdits[`${selectedTemplate.templatePath}:${partId}`];
+          const partImageSrc = getPartImageSrc(selectedTemplate.partsBasePath, part.image);
+          const response = await fetch(partImageSrc);
+
+          if (!response.ok) {
+            throw new Error(`Missing part ${fileName}`);
+          }
+
+          if (editDataUrl) {
+            const originalImage = await loadImage(partImageSrc);
+            const editImage = await loadImage(editDataUrl);
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            const fitScale = Math.min(470 / originalImage.width, 470 / originalImage.height);
+            const displayedWidth = originalImage.width * fitScale;
+            const displayedHeight = originalImage.height * fitScale;
+            const displayedX = (PAINT_CANVAS_SIZE - displayedWidth) / 2;
+            const displayedY = (PAINT_CANVAS_SIZE - displayedHeight) / 2;
+
+            canvas.width = originalImage.width;
+            canvas.height = originalImage.height;
+            context.drawImage(originalImage, 0, 0);
+            context.drawImage(
+              editImage,
+              displayedX,
+              displayedY,
+              displayedWidth,
+              displayedHeight,
+              0,
+              0,
+              originalImage.width,
+              originalImage.height,
+            );
+
+            const editedBlob = await new Promise((resolve, reject) => {
+              canvas.toBlob((blob) => {
+                if (blob) {
+                  resolve(blob);
+                } else {
+                  reject(new Error(`Could not encode ${fileName}`));
+                }
+              }, 'image/png');
+            });
+
+            partsFolder.file(fileName, editedBlob);
+          } else {
+            partsFolder.file(fileName, await response.blob());
+          }
+
+          templateExport.parts[part.bone] = {
+            ...part,
+            image: `parts/${fileName}`,
+          };
+        }),
+      );
+
+      const motionResponse = await fetch(selectedTemplate.motionPath);
+
+      if (!motionResponse.ok) {
+        throw new Error('Missing motion file');
+      }
+
+      zip.file('template.json', JSON.stringify(templateExport, null, 2));
+      zip.file('motion.json', JSON.stringify(await motionResponse.json(), null, 2));
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      downloadBlob(content, 'custom_pet.zip');
+    } catch (error) {
+      window.alert('导出失败，请确认本地模板文件已经加载成功。');
+    }
+  };
+
   return (
     <div className="paint-editor-shell">
       <div className="paint-board-row">
@@ -876,10 +1895,10 @@ function InteractivePetPreview({ selectedPart, selectedTemplate, status, templat
         >
           <Plus size={18} strokeWidth={2.75} />
         </button>
-        <button className="zoom-save-button" type="button">
+        <button className="zoom-save-button" onClick={saveEditedPart} type="button">
           Save
         </button>
-        <button className="generate-pet-button" type="button">
+        <button className="generate-pet-button" onClick={generatePresetPetZip} type="button">
           Generate Pet
         </button>
       </div>
@@ -936,11 +1955,13 @@ function App() {
   const [breedIndex, setBreedIndex] = useState(0);
   const [partIndex, setPartIndex] = useState(0);
   const [activeDragWheel, setActiveDragWheel] = useState(null);
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [dragOffsets, setDragOffsets] = useState({
     animal: 0,
     breed: 0,
     part: 0,
   });
+  const [activeStudioSlide, setActiveStudioSlide] = useState(0);
   const dragState = useRef(null);
   const lastDragMoved = useRef(false);
   const snapTimers = useRef({});
@@ -1231,6 +2252,100 @@ function App() {
     );
   };
 
+  const renderStudioSlide = (slideIndex) => {
+    if (slideIndex === 1) {
+      return (
+        <div className="studio-slide real-pet-slide" aria-hidden={activeStudioSlide !== slideIndex} key={slideIndex}>
+          <RealPetStudio />
+        </div>
+      );
+    }
+
+    return (
+      <div className="studio-slide" aria-hidden={activeStudioSlide !== slideIndex} key={slideIndex}>
+        <div className="studio-heading">
+          <p className="eyebrow">Character studio</p>
+          <h1>Build your AI pet personality</h1>
+        </div>
+
+        <div className="studio-preview">
+          <div className="studio-preview-background" aria-hidden="true">
+            <video
+              autoPlay
+              className="studio-preview-background-video"
+              loop
+              muted
+              playsInline
+              src="/cover1.mov?v=20260507153031"
+            />
+          </div>
+          <InteractivePetPreview
+            selectedPart={selectedPart}
+            selectedTemplate={selectedTemplate}
+            status={templateStatus}
+            template={template}
+          />
+          <div className="selection-tray" aria-label="Current pet selection">
+            <span>{selectedAnimal.label}</span>
+            <span>{selectedBreed?.label}</span>
+            <span>{selectedPart?.label}</span>
+          </div>
+        </div>
+
+        <div
+          className="wheel-panel"
+          aria-label="Pet editor wheel controls"
+          onPointerCancel={finishWheelDrag}
+          onPointerDown={handleWheelPointerDown}
+          onPointerMove={handleWheelPointerMove}
+          onPointerUp={finishWheelDrag}
+        >
+          <div className="center-line" aria-hidden="true" />
+          <WheelLayer
+            ariaLabel="Animal wheel"
+            className="animal-wheel"
+            dragOffset={dragOffsets.animal}
+            items={animalOptions}
+            isDragging={activeDragWheel === 'animal'}
+            onSelect={(index, angle) => handleWheelOptionClick('animal', index, angle)}
+            radius={100}
+            selectedIndex={animalIndex}
+            step={44}
+            wheelId="animal"
+          />
+          <WheelLayer
+            ariaLabel="Breed wheel"
+            className="breed-wheel"
+            dragOffset={dragOffsets.breed}
+            items={breedItems}
+            isDragging={activeDragWheel === 'breed'}
+            onSelect={(index, angle) => handleWheelOptionClick('breed', index, angle)}
+            radius={255}
+            selectedIndex={breedIndex}
+            showThumb
+            renderThumb={renderBreedThumb}
+            step={30}
+            wheelId="breed"
+          />
+          <WheelLayer
+            ariaLabel="Body part wheel"
+            className="part-wheel"
+            dragOffset={dragOffsets.part}
+            items={partItems}
+            isDragging={activeDragWheel === 'part'}
+            onSelect={(index, angle) => handleWheelOptionClick('part', index, angle)}
+            radius={445}
+            selectedIndex={partIndex}
+            showThumb
+            renderThumb={renderPartThumb}
+            step={24}
+            wheelId="part"
+          />
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="site-shell">
       <nav className="navbar" aria-label="Primary navigation">
@@ -1255,18 +2370,18 @@ function App() {
               A cute desktop companion that can chat, react, and stay with you while you work.
             </p>
             <div className="hero-actions">
-              <a className="button button-primary" href="#download">
-                Download for macOS
+              <a className="button button-primary" href="#overview">
+                <span className="hero-action-title">开始制作</span>
+                <span className="hero-action-subtitle">Start Creating</span>
               </a>
-              <a className="button button-primary" href="#download">
-                Download for Windows
-              </a>
-              <a className="button button-primary" href="#download">
-                Download for Linux
-              </a>
-              <a className="button button-secondary" href="#features">
-                View Features
-              </a>
+              <button
+                className="button button-secondary"
+                onClick={() => setIsTutorialOpen(true)}
+                type="button"
+              >
+                <span className="hero-action-title">查看教程</span>
+                <span className="hero-action-subtitle">View Tutorial</span>
+              </button>
             </div>
           </div>
 
@@ -1292,75 +2407,71 @@ function App() {
           </div>
         </section>
 
-        <section className="animal-studio section-grid" id="overview">
-          <div className="studio-heading">
-            <p className="eyebrow">Character studio</p>
-            <h1>Build your AI pet personality</h1>
+        <section className="download-section section-grid" id="download">
+          <div className="download-intro">
+            <p className="eyebrow">Download</p>
+            <h2>运行你的专属桌面宠物</h2>
+            <p>
+              这里分成两个下载：macOS 运行器负责启动桌面宠物，网页里生成的
+              <strong> custom_pet.zip </strong>
+              负责提供你的宠物外观数据。
+            </p>
           </div>
 
-          <div className="studio-preview">
-            <InteractivePetPreview
-              selectedPart={selectedPart}
-              selectedTemplate={selectedTemplate}
-              status={templateStatus}
-              template={template}
-            />
-            <div className="selection-tray" aria-label="Current pet selection">
-              <span>{selectedAnimal.label}</span>
-              <span>{selectedBreed?.label}</span>
-              <span>{selectedPart?.label}</span>
+          <div className="download-flow" aria-label="Desktop pet running steps">
+            <article className="download-step-card">
+              <span className="download-step-index">01</span>
+              <h3>下载 macOS 运行器</h3>
+              <p>这是桌面宠物 App 本体。下载后解压，首次打开如果被 macOS 拦截，请右键选择打开。</p>
+              <a className="button button-primary" href="/downloads/gaotadeskpet.zip" download>
+                下载运行器
+              </a>
+            </article>
+
+            <article className="download-step-card">
+              <span className="download-step-index">02</span>
+              <h3>制作宠物数据包</h3>
+              <p>回到制作区完成卡通宠物或真实宠物，点击 Generate Pet 下载 custom_pet.zip。</p>
+              <a className="button button-secondary" href="#overview">
+                开始制作
+              </a>
+            </article>
+
+            <article className="download-step-card">
+              <span className="download-step-index">03</span>
+              <h3>放置并运行</h3>
+              <p>解压 custom_pet.zip，把 custom_pet 文件夹放到 Downloads/custom_pet，然后重新打开运行器。</p>
+              <button className="button button-secondary" onClick={() => setIsTutorialOpen(true)} type="button">
+                查看教程
+              </button>
+            </article>
+          </div>
+        </section>
+
+        <section className="animal-studio" id="overview">
+          <div className="studio-carousel-viewport">
+            <div
+              className="studio-carousel-track"
+              style={{ transform: `translateX(-${activeStudioSlide * 100}%)` }}
+            >
+              {[0, 1].map((slideIndex) => renderStudioSlide(slideIndex))}
             </div>
           </div>
 
-          <div
-            className="wheel-panel"
-            aria-label="Pet editor wheel controls"
-            onPointerCancel={finishWheelDrag}
-            onPointerDown={handleWheelPointerDown}
-            onPointerMove={handleWheelPointerMove}
-            onPointerUp={finishWheelDrag}
-          >
-            <div className="center-line" aria-hidden="true" />
-            <WheelLayer
-              ariaLabel="Animal wheel"
-              className="animal-wheel"
-              dragOffset={dragOffsets.animal}
-              items={animalOptions}
-              isDragging={activeDragWheel === 'animal'}
-              onSelect={(index, angle) => handleWheelOptionClick('animal', index, angle)}
-              radius={100}
-              selectedIndex={animalIndex}
-              step={44}
-              wheelId="animal"
-            />
-            <WheelLayer
-              ariaLabel="Breed wheel"
-              className="breed-wheel"
-              dragOffset={dragOffsets.breed}
-              items={breedItems}
-              isDragging={activeDragWheel === 'breed'}
-              onSelect={(index, angle) => handleWheelOptionClick('breed', index, angle)}
-              radius={255}
-              selectedIndex={breedIndex}
-              showThumb
-              renderThumb={renderBreedThumb}
-              step={30}
-              wheelId="breed"
-            />
-            <WheelLayer
-              ariaLabel="Body part wheel"
-              className="part-wheel"
-              dragOffset={dragOffsets.part}
-              items={partItems}
-              isDragging={activeDragWheel === 'part'}
-              onSelect={(index, angle) => handleWheelOptionClick('part', index, angle)}
-              radius={445}
-              selectedIndex={partIndex}
-              showThumb
-              renderThumb={renderPartThumb}
-              step={24}
-              wheelId="part"
-            />
+          <div className="studio-slide-controls" aria-label="Character studio pages">
+            {studioSlideOptions.map((option, slideIndex) => (
+              <button
+                aria-label={option.title}
+                aria-pressed={activeStudioSlide === slideIndex}
+                className="studio-slide-button"
+                key={option.title}
+                onClick={() => setActiveStudioSlide(slideIndex)}
+                type="button"
+              >
+                <span className="studio-slide-button-title">{option.title}</span>
+                <span className="studio-slide-button-subtitle">{option.subtitle}</span>
+              </button>
+            ))}
           </div>
         </section>
 
@@ -1377,25 +2488,6 @@ function App() {
                 <p>{feature.text}</p>
               </article>
             ))}
-          </div>
-        </section>
-
-        <section className="download-section section-grid" id="download">
-          <div>
-            <p className="eyebrow">Download</p>
-            <h2>Download AI Desktop Pet</h2>
-            <p>Available for macOS</p>
-          </div>
-          <div className="download-actions">
-            <a className="button button-primary" href="#download">
-              Download .dmg
-            </a>
-            <a className="button button-primary" href="#download">
-              Download for Windows
-            </a>
-            <a className="button button-primary" href="#download">
-              Download for Linux
-            </a>
           </div>
         </section>
 
@@ -1417,6 +2509,105 @@ function App() {
           </form>
         </section>
       </main>
+
+      {isTutorialOpen && (
+        <div className="tutorial-overlay" role="presentation" onMouseDown={() => setIsTutorialOpen(false)}>
+          <section
+            aria-label="Create your desktop pet tutorial"
+            aria-modal="true"
+            className="tutorial-modal"
+            onMouseDown={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <button
+              aria-label="Close tutorial"
+              className="tutorial-close-button"
+              onClick={() => setIsTutorialOpen(false)}
+              type="button"
+            >
+              <X size={22} strokeWidth={2.4} />
+            </button>
+
+            <div className="tutorial-intro">
+              <p className="eyebrow">Tutorial</p>
+              <h2>创建你的专属桌面宠物</h2>
+              <p>
+                你可以先下载 macOS 运行器，再从预设卡通模板开始，或导入真实宠物照片自己抠图。网页最终生成的是
+                <strong> custom_pet.zip </strong>
+                宠物数据包；运行器 App 会读取这个数据包并把宠物显示在桌面上。
+              </p>
+            </div>
+
+            <div className="tutorial-grid">
+              <article className="tutorial-card tutorial-card-primary">
+                <img
+                  className="tutorial-visual"
+                  src="/tutorial/cartoon-builder.svg"
+                  alt="Cartoon pet builder showing drawing canvas, part picker, and save flow"
+                />
+                <span className="tutorial-step">01</span>
+                <h3>卡通形象创作</h3>
+                <ol>
+                  <li>点击“开始制作”，默认进入“生成卡通的专属宠物”。</li>
+                  <li>在右侧转盘选择动物、品种和部位，例如 overview、head、tail、body。</li>
+                  <li>在左侧画板用画笔、橡皮擦、填充和颜色工具修改 PNG 外观。</li>
+                  <li>点击 Save 保存当前切件，overview 会根据当前模板实时预览。</li>
+                  <li>完成后点击 Generate Pet，导出可运行的 custom_pet.zip。</li>
+                </ol>
+              </article>
+
+              <article className="tutorial-card">
+                <img
+                  className="tutorial-visual"
+                  src="/tutorial/real-cutout.svg"
+                  alt="Real pet cutout workspace showing brush mask and saved parts"
+                />
+                <span className="tutorial-step">02</span>
+                <h3>真实宠物创作</h3>
+                <ol>
+                  <li>切换到“生成实际的专属宠物”。</li>
+                  <li>拖入或重新导入一张真实宠物图片。</li>
+                  <li>选择 head、body、tail 或四肢，用圆形抠图笔涂出要保留的区域。</li>
+                  <li>用橡皮擦修边，必要时用回退或 Reset 重做当前 mask。</li>
+                  <li>点击 Save，把当前 mask 保存成透明 PNG 切件。</li>
+                </ol>
+              </article>
+
+              <article className="tutorial-card">
+                <img
+                  className="tutorial-visual"
+                  src="/tutorial/assembly-export.svg"
+                  alt="Assembly editor showing draggable PNG parts, pivot points, and export"
+                />
+                <span className="tutorial-step">03</span>
+                <h3>拼装与 pivot</h3>
+                <ol>
+                  <li>保存多个切件后，在右侧切到 Assembly。</li>
+                  <li>拖动每个 PNG，调整它在 512x512 画布里的 position。</li>
+                  <li>拖动蓝色 pivot 点，设置头、尾巴和四肢旋转的位置。</li>
+                  <li>template.json 会记录每个切件的 size、position 和 pivot。</li>
+                </ol>
+              </article>
+
+              <article className="tutorial-card">
+                <img
+                  className="tutorial-visual"
+                  src="/tutorial/start-creating.svg"
+                  alt="Start creating flow from homepage to custom pet export"
+                />
+                <span className="tutorial-step">04</span>
+                <h3>导出并运行</h3>
+                <ol>
+                  <li>先到 Download 区下载 macOS 运行器，这是可以打开的桌面宠物 App。</li>
+                  <li>制作完成后点击 Generate Pet 下载 custom_pet.zip，这是宠物数据包。</li>
+                  <li>解压 zip，得到 custom_pet 文件夹。</li>
+                  <li>把 custom_pet 文件夹放到 Downloads/custom_pet，再打开运行器；首次打开被拦截时右键选择打开。</li>
+                </ol>
+              </article>
+            </div>
+          </section>
+        </div>
+      )}
 
       <footer className="footer">
         <span>AI Desktop Pet</span>

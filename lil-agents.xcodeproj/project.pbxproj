@@ -33,7 +33,7 @@
 		A10000020000000000000025 /* LilAgentsController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LilAgentsController.swift; sourceTree = "<group>"; };
 		A10000020000000000000030 /* AgentSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSession.swift; sourceTree = "<group>"; };
 			A10000020000000000000043 /* DoubaoSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubaoSession.swift; sourceTree = "<group>"; };
-			A10000030000000000000001 /* lil agents.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "lil agents.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000030000000000000001 /* gaotadeskpet.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = gaotadeskpet.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000020000000000000001 /* PetTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetTemplate.swift; sourceTree = "<group>"; };
 		A20000020000000000000002 /* PetMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetMotion.swift; sourceTree = "<group>"; };
 		A20000020000000000000003 /* PetPackageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetPackageLoader.swift; sourceTree = "<group>"; };
@@ -87,7 +87,7 @@
 		A10000050000000000000003 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A10000030000000000000001 /* lil agents.app */,
+				A10000030000000000000001 /* gaotadeskpet.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -112,7 +112,7 @@
 				A1000000B000000000000002 /* Sparkle */,
 			);
 			productName = LilAgents;
-			productReference = A10000030000000000000001 /* lil agents.app */;
+			productReference = A10000030000000000000001 /* gaotadeskpet.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -303,7 +303,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LilAgents/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "lil agents";
+				INFOPLIST_KEY_CFBundleDisplayName = gaotadeskpet;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSMainNibFile = "";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -312,8 +312,8 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.2.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.lilagents.app;
-				PRODUCT_NAME = "lil agents";
+				PRODUCT_BUNDLE_IDENTIFIER = com.gaotadeskpet.app;
+				PRODUCT_NAME = gaotadeskpet;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -331,7 +331,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LilAgents/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "lil agents";
+				INFOPLIST_KEY_CFBundleDisplayName = gaotadeskpet;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSMainNibFile = "";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -341,8 +341,8 @@
 				);
 				MARKETING_VERSION = 1.2.2;
 				ONLY_ACTIVE_ARCH = NO;
-				PRODUCT_BUNDLE_IDENTIFIER = com.lilagents.app;
-				PRODUCT_NAME = "lil agents";
+				PRODUCT_BUNDLE_IDENTIFIER = com.gaotadeskpet.app;
+				PRODUCT_NAME = gaotadeskpet;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
