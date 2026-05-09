@@ -26,6 +26,15 @@ export const petCatalog = [
     partsBasePath: '/pet-templates/dog/shiba/parts',
     overviewImagePath: '/pet-templates/dog/shiba/Overview.png',
   },
+  {
+    animalType: 'cat',
+    breed: 'ragdoll',
+    label: 'Ragdoll',
+    templatePath: '/pet-templates/cat/ragdoll/template.json',
+    motionPath: '/pet-templates/cat/shared_motion.json',
+    partsBasePath: '/pet-templates/cat/ragdoll/parts',
+    overviewImagePath: '/pet-templates/cat/ragdoll/overview.png',
+  },
 ];
 
 export const animalOptions = [
