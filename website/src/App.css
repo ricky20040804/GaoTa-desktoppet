@@ -119,8 +119,7 @@ main {
 .animal-studio,
 .hero,
 .features-section,
-.download-section,
-.login-section {
+.download-section {
   scroll-margin-top: 7rem;
 }
 
@@ -1738,8 +1737,7 @@ h3 {
   top: 3rem;
 }
 
-.features-section,
-.login-section {
+.features-section {
   padding: 5.5rem 0;
 }
 
@@ -1756,7 +1754,6 @@ h3 {
 }
 
 .feature-card,
-.login-card,
 .download-section {
   backdrop-filter: blur(20px);
   background: var(--card);
@@ -1992,48 +1989,6 @@ main > .download-section:first-child {
 
 .download-section p {
   margin-bottom: 0;
-}
-
-.login-section {
-  padding-top: 1.5rem;
-}
-
-.login-card {
-  border-radius: 1.7rem;
-  display: grid;
-  gap: 0.7rem;
-  margin: 0 auto;
-  max-width: 460px;
-  padding: 1.3rem;
-}
-
-.login-card label {
-  color: #443b4c;
-  font-size: 0.9rem;
-  font-weight: 850;
-  margin-top: 0.35rem;
-}
-
-.login-card input {
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid var(--line);
-  border-radius: 1rem;
-  color: var(--ink);
-  font: inherit;
-  min-height: 3.2rem;
-  outline: none;
-  padding: 0 1rem;
-  transition: border-color 180ms ease, box-shadow 180ms ease;
-}
-
-.login-card input:focus {
-  border-color: rgba(103, 87, 255, 0.58);
-  box-shadow: 0 0 0 4px rgba(103, 87, 255, 0.12);
-}
-
-.login-button {
-  margin-top: 0.7rem;
-  width: 100%;
 }
 
 .footer {

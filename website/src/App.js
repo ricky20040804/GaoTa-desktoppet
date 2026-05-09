@@ -2201,11 +2201,6 @@ function App() {
     snapWheelOption(wheelId, index, optionAngle);
   };
 
-  const handleLogin = (event) => {
-    event.preventDefault();
-    alert('Login feature coming soon');
-  };
-
   const renderBreedThumb = (item) => {
     if (!item.template?.overviewImagePath) {
       return null;
@@ -2357,7 +2352,6 @@ function App() {
           <a href="#home">Home</a>
           <a href="#features">Features</a>
           <a href="#download">Download</a>
-          <a href="#login">Login</a>
         </div>
       </nav>
 
@@ -2491,23 +2485,6 @@ function App() {
           </div>
         </section>
 
-        <section className="login-section" id="login">
-          <div className="section-heading">
-            <p className="eyebrow">Account</p>
-            <h2>Login</h2>
-          </div>
-          <form className="login-card" onSubmit={handleLogin}>
-            <label htmlFor="email">Email</label>
-            <input id="email" name="email" type="email" placeholder="you@example.com" />
-
-            <label htmlFor="password">Password</label>
-            <input id="password" name="password" type="password" placeholder="Password" />
-
-            <button className="button button-primary login-button" type="submit">
-              Login
-            </button>
-          </form>
-        </section>
       </main>
 
       {isTutorialOpen && (
